@@ -1,51 +1,76 @@
-# Деплой файли
-/deploy.sh
-/deploy_portal.sh
-/deploy_final.sh
-
-# Середовище
-/.env
-/.env.local
-/.env.*.local
-
-# Залежності
-/node_modules/
-/vendor/
-/composer.lock
-/package-lock.json
-/yarn.lock
-
-# Логи
-/logs/
-*.log
-npm-debug.log*
-
 # Системні файли
 .DS_Store
 Thumbs.db
-
-# IDE
-/.idea/
-/.vscode/
 *.swp
 *.swo
+*.swn
+*.bak
 
-# Кеш
-/.cache/
-/tmp/
+# Логи
+*.log
+logs/
+storage/logs/*.log
+
+# Залежності
+vendor/
+node_modules/
+composer.lock
+package-lock.json
+yarn.lock
+
+# Конфігурація середовища
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+
+# Backup файли
+*.backup
+*.old
+*.tmp
+*.temp
+*~
+
+# Ідеї
+.idea/
+.vscode/
+*.code-workspace
+
+# Тестові файли
+*test*.php
+*-test.php
+test-*
+test_*
+
+# Деплой скрипти (зайві)
+deploy-*.sh
+!deploy.sh
+!deploy-final.sh
+!deploy-simple.sh
+
+# Тимчасові файли аналізу
+portal-structure-*.md
+portal-structure-*.txt
+simple-analyze.sh
+organize-portal.sh
+
+# Временные uploads
+uploads/temp/
+uploads/cache/
 
 # Бази даних
-*.sqlite
+*.sql
 *.db
+*.sqlite
 
 # Docker
-docker-data/
+docker-compose.override.yml
 
-# Збірка
-/dist/
-/build/
-/coverage/
+# Документація тимчасова
+/docs/temp/
+/docs/build/
 
-# Тести
-/test-results/
-/playwright-report/
+# Файли з конфліктуючими назвами
+config-*.php
+fix-*.php
