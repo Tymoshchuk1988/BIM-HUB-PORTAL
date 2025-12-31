@@ -1,0 +1,51 @@
+# Деплой файли
+/deploy.sh
+/deploy_portal.sh
+/deploy_final.sh
+
+# Середовище
+/.env
+/.env.local
+/.env.*.local
+
+# Залежності
+/node_modules/
+/vendor/
+/composer.lock
+/package-lock.json
+/yarn.lock
+
+# Логи
+/logs/
+*.log
+npm-debug.log*
+
+# Системні файли
+.DS_Store
+Thumbs.db
+
+# IDE
+/.idea/
+/.vscode/
+*.swp
+*.swo
+
+# Кеш
+/.cache/
+/tmp/
+
+# Бази даних
+*.sqlite
+*.db
+
+# Docker
+docker-data/
+
+# Збірка
+/dist/
+/build/
+/coverage/
+
+# Тести
+/test-results/
+/playwright-report/
