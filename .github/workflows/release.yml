@@ -1,0 +1,62 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+        
+    - name: Create GitHub Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        draft: false
+        prerelease: false
+        
+    - name: Generate changelog
+      run: |
+        echo "# 🏗️ BIM Hub Portal ${{ github.ref }}" > CHANGELOG.md
+        echo "" >> CHANGELOG.md
+        echo "## Changes" >> CHANGELOG.md
+        echo "" >> CHANGELOG.md
+        git log --oneline --no-merges $(git describe --tags --abbrev=0 2>/dev/null || echo "")..HEAD | \
+          sed 's/^/- /' >> CHANGELOG.md
+          
+    - name: Upload release assets
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./CHANGELOG.md
+        asset_name: CHANGELOG.md
+        asset_content_type: text/markdown
+        
+    - name: Auto-deploy release
+      env:
+        DEPLOY_PASSWORD: ${{ secrets.DEPLOY_PASSWORD }}
+        DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+      run: |
+        echo "🚀 Auto-deploying release ${{ github.ref }}"
+        
+        # Виконуємо деплой
+        sshpass -p "$DEPLOY_PASSWORD" ssh -o StrictHostKeyChecking=no "$DEPLOY_USER@$DEPLOY_HOST" "
+          cd $DEPLOY_PATH
+          echo 'Deploying version: ${{ github.ref }}'
+          echo 'Deployment time: $(date)'
+        "

@@ -1,0 +1,114 @@
+name: CI/CD Pipeline
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+  push:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.2'
+        extensions: mbstring, xml, ctype, iconv, intl, pdo_mysql, pdo_pgsql
+        
+    - name: Validate composer.json
+      run: composer validate --strict
+      
+    - name: Install PHP dependencies
+      run: composer install --prefer-dist --no-progress
+      
+    - name: Run PHP syntax check
+      run: find . -name "*.php" -exec php -l {} \;
+      
+    - name: Check for syntax errors in PHP files
+      run: |
+        echo "Checking PHP files for syntax errors..."
+        find . -name "*.php" -type f | while read file; do
+          if ! php -l "$file" > /dev/null 2>&1; then
+            echo "❌ Syntax error in: $file"
+            php -l "$file"
+            exit 1
+          fi
+        done
+        echo "✅ All PHP files have valid syntax"
+        
+    - name: Security check with PHPStan
+      run: |
+        if [ -f "vendor/bin/phpstan" ]; then
+          vendor/bin/phpstan analyse --level=1 src/ public_html/
+        else
+          echo "PHPStan not installed, skipping..."
+        fi
+        
+  build:
+    runs-on: ubuntu-latest
+    needs: test
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        
+    - name: Install Node dependencies
+      run: npm ci
+      
+    - name: Build assets
+      run: npm run build
+      
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: frontend-assets
+        path: |
+          public_html/dist/
+        retention-days: 7
+        
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [test, build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: production
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Download build artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: frontend-assets
+        
+    - name: Deploy to production
+      uses: appleboy/ssh-action@v0.1.7
+      with:
+        host: ${{ secrets.DEPLOY_HOST }}
+        username: ${{ secrets.DEPLOY_USER }}
+        password: ${{ secrets.DEPLOY_PASSWORD }}
+        port: 22
+        script: |
+          cd /home/ec606796/bimhub.site/www
+          
+          echo "📦 Starting deployment..."
+          echo "🕐 $(date)"
+          
+          # Створення бекапу
+          BACKUP_DIR="/home/ec606796/backups/$(date +%Y%m%d_%H%M%S)"
+          mkdir -p "$BACKUP_DIR"
+          cp -r . "$BACKUP_DIR/" 2>/dev/null || true
+          echo "✅ Backup created: $BACKUP_DIR"
+          
+          # Оновлення файлів
+          echo "🔄 Updating files..."

@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    container_name: bimhub-prod
+    restart: always
+    ports:
+      - "80:80"
+    environment:
+      - APP_ENV=production
+      - APP_DEBUG=false
+    volumes:
+      - ./public_html:/var/www/html
+      - ./logs:/var/log/apache2
+    networks:
+      - bimhub-prod-network
+
+networks:
+  bimhub-prod-network:
+    driver: bridge

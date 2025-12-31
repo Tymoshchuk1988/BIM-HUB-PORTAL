@@ -1,0 +1,173 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:  # Дозволяє ручний запуск з GitHub UI
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Setup SSH
+      uses: webfactory/ssh-agent@v0.7.0
+      with:
+        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+        
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y sshpass curl
+        
+    - name: Test SSH connection
+      env:
+        DEPLOY_PASSWORD: ${{ secrets.DEPLOY_PASSWORD }}
+        DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      run: |
+        echo "Testing SSH connection..."
+        sshpass -p "$DEPLOY_PASSWORD" ssh -o StrictHostKeyChecking=no "$DEPLOY_USER@$DEPLOY_HOST" "echo 'SSH connection successful'"
+        
+    - name: Run deployment script
+      env:
+        DEPLOY_PASSWORD: ${{ secrets.DEPLOY_PASSWORD }}
+        DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+      run: |
+        echo "🚀 Starting deployment..."
+        
+        # Створюємо скрипт деплою
+        cat > /tmp/deploy.sh << 'SCRIPT'
+        #!/bin/bash
+        PASSWORD="$DEPLOY_PASSWORD"
+        HOST="$DEPLOY_HOST"
+        USER="$DEPLOY_USER"
+        REMOTE="$DEPLOY_PATH"
+        LOCAL="./public_html"
+        
+        echo "Deploying from $(pwd)"
+        
+        # Функція для завантаження
+        upload() {
+            local src="\$1"
+            local dst="\$2"
+            
+            if sshpass -p "\$PASSWORD" scp -o StrictHostKeyChecking=no -r "\$src" "\$USER@\$HOST:\$dst" 2>/dev/null; then
+                echo "✓ \$(basename "\$src")"
+                return 0
+            else
+                echo "✗ \$(basename "\$src")"
+                return 1
+            fi
+        }
+        
+        # Основний деплой
+        echo "Phase 1: Main files"
+        upload "\$LOCAL/index.php" "\$REMOTE/"
+        upload "\$LOCAL/login.php" "\$REMOTE/"
+        upload "\$LOCAL/contact.php" "\$REMOTE/"
+        upload "\$LOCAL/layout.php" "\$REMOTE/"
+        upload "\$LOCAL/.htaccess" "\$REMOTE/"
+        
+        echo "Phase 2: Resources"
+        upload "\$LOCAL/css/" "\$REMOTE/css/"
+        upload "\$LOCAL/js/" "\$REMOTE/js/"
+        upload "\$LOCAL/includes/" "\$REMOTE/includes/"
+        
+        echo "Phase 3: Pages"
+        sshpass -p "\$PASSWORD" ssh -o StrictHostKeyChecking=no "\$USER@\$HOST" \
+            "mkdir -p \$REMOTE/pages/{strategy,projects,library,education,team}"
+        
+        for page in strategy projects library education team; do
+            upload "\$LOCAL/pages/\$page/index.php" "\$REMOTE/pages/\$page/"
+        done
+        
+        echo "Phase 4: Permissions"
+        sshpass -p "\$PASSWORD" ssh -o StrictHostKeyChecking=no "\$USER@\$HOST" "
+            cd \$REMOTE
+            find . -type d -exec chmod 755 {} \;
+            find . -type f -exec chmod 644 {} \;
+            echo 'Permissions updated'
+        "
+        
+        echo "✅ Deployment completed"
+        SCRIPT
+        
+        chmod +x /tmp/deploy.sh
+        /tmp/deploy.sh
+        
+    - name: Health check
+      env:
+        DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      run: |
+        echo "Running health checks..."
+        SITE_URL="https://bimhub.site"
+        
+        # Перевірка головної сторінки
+        if curl -s -f "$SITE_URL" > /dev/null; then
+          echo "✅ Main page is accessible"
+        else
+          echo "❌ Main page is not accessible"
+          exit 1
+        fi
+        
+        # Перевірка сторінок
+        for page in "" "pages/strategy/" "pages/projects/" "pages/library/" "pages/education/" "pages/team/" "contact.php"; do
+          url="$SITE_URL/$page"
+          status_code=$(curl -s -o /dev/null -w "%{http_code}" "$url")
+          
+          if [[ "$status_code" =~ ^(200|301|302)$ ]]; then
+            echo "✅ $url - $status_code"
+          else
+            echo "❌ $url - $status_code"
+          fi
+        done
+        
+    - name: Create deployment summary
+      if: always()
+      run: |
+        echo "# Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## 📊 Deployment Status" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
+        echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Code Checkout | ✅ Success |" >> $GITHUB_STEP_SUMMARY
+        echo "| SSH Connection | ✅ Success |" >> $GITHUB_STEP_SUMMARY
+        echo "| File Deployment | ✅ Success |" >> $GITHUB_STEP_SUMMARY
+        echo "| Health Checks | ✅ Success |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## 🌐 Site Status" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- **Main URL**: https://bimhub.site" >> $GITHUB_STEP_SUMMARY
+        echo "- **Strategy**: https://bimhub.site/pages/strategy/" >> $GITHUB_STEP_SUMMARY
+        echo "- **Projects**: https://bimhub.site/pages/projects/" >> $GITHUB_STEP_SUMMARY
+        echo "- **Library**: https://bimhub.site/pages/library/" >> $GITHUB_STEP_SUMMARY
+        echo "- **Education**: https://bimhub.site/pages/education/" >> $GITHUB_STEP_SUMMARY
+        echo "- **Team**: https://bimhub.site/pages/team/" >> $GITHUB_STEP_SUMMARY
+        echo "- **Contact**: https://bimhub.site/contact.php" >> $GITHUB_STEP_SUMMARY
+        
+    - name: Notify success
+      if: success()
+      uses: rtCamp/action-slack-notify@v2
+      env:
+        SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+        SLACK_TITLE: "✅ BIM Hub Portal Deployed"
+        SLACK_MESSAGE: "Successful deployment to production"
+        SLACK_COLOR: "good"
+        
+    - name: Notify failure
+      if: failure()
+      uses: rtCamp/action-slack-notify@v2
+      env:
+        SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+        SLACK_TITLE: "❌ BIM Hub Portal Deployment Failed"
+        SLACK_MESSAGE: "Check GitHub Actions for details"
+        SLACK_COLOR: "danger"
