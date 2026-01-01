@@ -1,0 +1,18 @@
+{
+  "name": "bim-hub-portal",
+  "version": "1.0.0",
+  "description": "BIM Hub Portal - Building Information Modeling Platform",
+  "private": true,
+  "workspaces": [
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "preview": "cd frontend && npm run preview",
+    "deploy": "./deploy-simple.sh"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
